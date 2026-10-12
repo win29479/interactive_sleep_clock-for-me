@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Sleep Clock - นาฬิกาวิเคราะห์วงจรการนอนหลับ</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', '"Prompt"', 'sans-serif'],
+          },
+          colors: {
+            sleep: {
+              dark: '#070913',
+              card: '#0f1424',
+              cardBorder: '#1c243f',
+              bed: '#818cf8',
+              bedGlow: '#6366f1',
+              wake: '#fbbf24',
+              wakeGlow: '#f59e0b',
+              accent: '#38bdf8',
+              deep: '#4f46e5',
+              rem: '#06b6d4',
+              light: '#60a5fa'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom styling & slider smoothness */
+    body {
+      background: radial-gradient(circle at 50% 20%, #11172e 0%, #080a14 70%, #030408 100%);
+      color: #f1f5f9;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    .dial-svg {
+      touch-action: none;
+    }
+    .handle {
+      cursor: grab;
+      filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.6));
+      transition: transform 0.1s ease-out;
+    }
+    .handle:active {
+      cursor: grabbing;
+      transform: scale(1.12);
+    }
+    .glass-card {
+      background: rgba(16, 22, 38, 0.7);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    /* Pulse glow */
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 0.7; }
+      50% { opacity: 1; }
+    }
+    .glow-anim {
+      animation: pulse-subtle 4s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="min-h-screen font-sans flex flex-col justify-between selection:bg-indigo-500/30">
+
+  <header class="w-full px-5 py-4 max-w-4xl mx-auto flex items-center justify-between border-b border-white/5">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-amber-400 p-[1.5px] flex items-center justify-center shadow-lg shadow-indigo-500/20">
+        <div class="w-full h-full bg-[#0d1222] rounded-[14px] flex items-center justify-center">
+          <span class="text-lg">🌙</span>
+        </div>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight bg-gradient-to-r from-white via-indigo-100 to-slate-400 bg-clip-text text-transparent">
+          SleepClock
+        </h1>
+        <p class="text-xs text-slate-400 font-light">นาฬิกาคำนวณวงจรการนอนอัจฉริยะ (90-Min Cycles)</p>
+      </div>
+    </div>
+
+    <!-- Ambient Sound Button & Info -->
+    <div class="flex items-center gap-2">
+      <button id="ambientSoundBtn" class="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium glass-card hover:border-indigo-400/50 hover:bg-white/5 transition-all duration-200">
+        <span id="soundIcon" class="text-sm">🎧</span>
+        <span id="soundText" class="hidden sm:inline">เสียงกล่อมนอน (White Noise)</span>
+      </button>
+      <button id="infoBtn" class="w-8 h-8 rounded-full glass-card flex items-center justify-center text-xs font-bold text-slate-300 hover:text-white hover:border-indigo-400/50">
+        ?
+      </button>
+    </div>
+  </header>
+
+  <main class="w-full max-w-4xl mx-auto px-4 py-5 flex-1 flex flex-col gap-6">
+
+    <!-- Top Time Summary Bar -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <!-- Bedtime Box -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col justify-between border-l-4 border-l-indigo-400 relative overflow-hidden group">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+            <span class="text-base">🌙</span> เข้านอน (Bedtime)
+          </span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-300 font-mono">Start</span>
+        </div>
+        <div class="text-2xl sm:text-3xl font-extrabold tracking-tight text-indigo-200 font-mono" id="bedtimeDisplay">23:00</div>
+        <span class="text-[11px] text-slate-400 mt-0.5" id="bedtimeMeridiem">11:00 PM</span>
+      </div>
+
+      <!-- Wakeup Box -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col justify-between border-l-4 border-l-amber-400 relative overflow-hidden group">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+            <span class="text-base">☀️</span> ตื่นนอน (Wake-up)
+          </span>
+          <span class="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-300 font-mono">End</span>
+        </div>
+        <div class="text-2xl sm:text-3xl font-extrabold tracking-tight text-amber-200 font-mono" id="wakeupDisplay">06:30</div>
+        <span class="text-[11px] text-slate-400 mt-0.5" id="wakeupMeridiem">06:30 AM</span>
+      </div>
+
+      <!-- Total Duration Box -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col justify-between border-l-4 border-l-cyan-400">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+            <span>⏱️</span> เวลานอนรวม
+          </span>
+        </div>
+        <div class="text-2xl sm:text-3xl font-extrabold text-cyan-200 font-mono" id="durationDisplay">7 ชม. 30 น.</div>
+        <span class="text-[11px] text-slate-400 mt-0.5" id="durationSub">450 นาที</span>
+      </div>
+
+      <!-- Sleep Cycles Quality -->
+      <div class="glass-card rounded-2xl p-4 flex flex-col justify-between border-l-4 border-l-emerald-400">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-medium text-slate-400 flex items-center gap-1.5">
+            <span>⚡</span> รอบการนอน (90 นาที)
+          </span>
+        </div>
+        <div class="flex items-baseline gap-1.5">
+          <span class="text-2xl sm:text-3xl font-extrabold text-emerald-300 font-mono" id="cyclesCountDisplay">5.0</span>
+          <span class="text-xs font-semibold text-emerald-400" id="cycleStatusBadge">รอบ (เหมาะสมที่สุด)</span>
+        </div>
+        <span class="text-[11px] text-emerald-400/80 font-medium mt-0.5" id="cycleRecommendationText">ตื่นสดชื่น ไม่งัวเงีย (No Sleep Inertia)</span>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+      
+      <!-- Interactive Circular Clock Dial (SVG) -->
+      <div class="lg:col-span-7 flex flex-col items-center justify-center relative p-3">
+        <div class="relative w-[320px] h-[320px] sm:w-[380px] sm:h-[380px] select-none">
+          
+          <!-- Dial Ambient Glow Background -->
+          <div class="absolute inset-0 rounded-full bg-gradient-to-tr from-indigo-950/40 via-purple-950/20 to-amber-950/30 filter blur-2xl opacity-70"></div>
+
+          <!-- SVG Canvas Dial -->
+          <svg id="clockSvg" class="dial-svg w-full h-full relative z-10" viewBox="0 0 400 400">
+            <defs>
+              <!-- Gradient along the sleep arc -->
+              <linearGradient id="sleepArcGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#6366f1" />
+                <stop offset="50%" stop-color="#38bdf8" />
+                <stop offset="100%" stop-color="#f59e0b" />
+              </linearGradient>
+
+              <!-- Radial glow filter -->
+              <filter id="handleGlow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
+                <feMerge>
+                  <feMergeNode in="coloredBlur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+
+              <filter id="arcGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            <!-- Background Track Circle -->
+            <circle cx="200" cy="200" r="145" fill="none" stroke="#161e38" stroke-width="28" stroke-linecap="round" />
+            
+            <!-- Secondary subtle inner rim -->
+            <circle cx="200" cy="200" r="126" fill="none" stroke="#1c2747" stroke-width="1.2" stroke-dasharray="3 4" opacity="0.6" />
+
+            <!-- Hourly Ticks & Labels Container -->
+            <g id="ticksContainer"></g>
+
+            <!-- Sleep Window Arc (Glowing Track) -->
+            <path id="sleepArcPath" fill="none" stroke="url(#sleepArcGradient)" stroke-width="26" stroke-linecap="round" filter="url(#arcGlow)" class="cursor-pointer transition-all" />
+
+            <!-- Bedtime Draggable Handle -->
+            <g id="bedtimeHandle" class="handle" filter="url(#handleGlow)">
+              <circle cx="200" cy="55" r="19" fill="#1e1b4b" stroke="#818cf8" stroke-width="3.5" />
+              <!-- Moon Icon -->
+              <text x="200" y="61" text-anchor="middle" font-size="15" fill="#e0e7ff" pointer-events="none">🌙</text>
+            </g>
+
+            <!-- Wakeup Draggable Handle -->
+            <g id="wakeupHandle" class="handle" filter="url(#handleGlow)">
+              <circle cx="200" cy="55" r="19" fill="#451a03" stroke="#fbbf24" stroke-width="3.5" />
+              <!-- Sun Icon -->
+              <text x="200" y="61" text-anchor="middle" font-size="15" fill="#fef3c7" pointer-events="none">☀️</text>
+            </g>
+
+            <!-- Center Clock Display -->
+            <g pointer-events="none">
+              <circle cx="200" cy="200" r="82" fill="#0b0f1d" stroke="#1e293b" stroke-width="1.5" />
+              <text x="200" y="180" text-anchor="middle" font-size="11" fill="#94a3b8" letter-spacing="1.5" font-weight="600">เวลานอนรวม</text>
+              <text id="centerDurationText" x="200" y="210" text-anchor="middle" font-size="24" fill="#f8fafc" font-weight="800" font-family="'Plus Jakarta Sans', sans-serif">7h 30m</text>
+              <text id="centerCyclesText" x="200" y="232" text-anchor="middle" font-size="12" fill="#34d399" font-weight="600">5.0 รอบสมบูรณ์</text>
+            </g>
+          </svg>
+        </div>
+
+        <div class="flex items-center gap-3 text-xs text-slate-400 mt-2 bg-slate-900/60 px-4 py-1.5 rounded-full border border-white/5">
+          <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> เลื่อน 🌙 เข้านอน</span>
+          <span class="text-slate-600">•</span>
+          <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> เลื่อน ☀️ เวลาตื่น</span>
+          <span class="text-slate-600 hidden sm:inline">•</span>
+          <span class="hidden sm:inline text-slate-400">หรือลากแถบสีเพื่อเลื่อนพร้อมกัน</span>
+        </div>
+      </div>
+
+      <div class="lg:col-span-5 flex flex-col gap-4">
+
+        <!-- Quick Presets -->
+        <div class="glass-card rounded-2xl p-4">
+          <h2 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center justify-between">
+            <span>⚙️ โหมดแนะนำตามรอบ 90 นาที</span>
+            <span class="text-[10px] text-indigo-400 font-normal">กดเพื่อปรับเวลาทันที</span>
+          </h2>
+
+          <div class="space-y-2">
+            <button class="preset-btn w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 hover:bg-indigo-950/60 border border-slate-700/50 hover:border-indigo-500/60 text-left transition flex items-center justify-between group" data-hours="7.5" data-bed="23.0">
+              <div>
+                <div class="text-sm font-semibold text-slate-200 group-hover:text-indigo-200">5 รอบ • 7 ชม. 30 น. (มาตรฐาน)</div>
+                <div class="text-xs text-slate-400">23:00 น. ➔ 06:30 น. • สมดุลการซ่อมแซมสมองและร่างกาย</div>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono">แนะนำ</span>
+            </button>
+
+            <button class="preset-btn w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 hover:bg-indigo-950/60 border border-slate-700/50 hover:border-indigo-500/60 text-left transition flex items-center justify-between group" data-hours="9" data-bed="22.5">
+              <div>
+                <div class="text-sm font-semibold text-slate-200 group-hover:text-indigo-200">6 รอบ • 9 ชม. 00 น. (ฟื้นฟูล้ำลึก)</div>
+                <div class="text-xs text-slate-400">22:30 น. ➔ 07:30 น. • นักกีฬา หรือผู้ที่อ่อนเพลียสะสม</div>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-mono">ฟื้นฟูสูง</span>
+            </button>
+
+            <button class="preset-btn w-full px-3.5 py-2.5 rounded-xl bg-slate-800/60 hover:bg-indigo-950/60 border border-slate-700/50 hover:border-indigo-500/60 text-left transition flex items-center justify-between group" data-hours="6" data-bed="23.5">
+              <div>
+                <div class="text-sm font-semibold text-slate-200 group-hover:text-indigo-200">4 รอบ • 6 ชม. 00 น. (เร่งด่วน)</div>
+                <div class="text-xs text-slate-400">23:30 น. ➔ 05:30 น. • ขั้นต่ำที่สมองยังคงทำงานได้มีประสิทธิภาพ</div>
+              </div>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-mono">เร็ว</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Optimal Wake Time Smart Advisor -->
+        <div class="glass-card rounded-2xl p-4 border border-indigo-500/20">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">⏰ เวลาตื่นที่ดีที่สุดหากนอนเวลานี้</span>
+            <span class="text-[10px] text-slate-400">ตื่นท้ายรอบ REM</span>
+          </div>
+          <div class="grid grid-cols-3 gap-2" id="optimalWakeTimesList">
+            <!-- Injected via JS -->
+          </div>
+          <p class="text-[11px] text-slate-400 mt-2.5 leading-relaxed">
+            💡 <strong class="text-slate-300">กฎรอบ 90 นาที:</strong> หากตื่นช่วงกึ่งกลางรอบ (หลับลึก Deep Sleep) จะเกิดอาการ <em>Sleep Inertia</em> มึนหัว อ่อนเพลียแม้จะนอนหลายชั่วโมง
+          </p>
+        </div>
+
+      </div>
+    </div>
+
+    <section class="glass-card rounded-2xl p-5 mt-1 border border-white/10">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b border-white/5">
+        <div>
+          <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
+            <span>🧬 โครงสร้างลำดับขั้นการนอน (Hypnogram Architecture)</span>
+          </h2>
+          <p class="text-xs text-slate-400">แสดงการจำลองการเปลี่ยนผ่านของระดับการนอนในแต่ละรอบตามช่วงเวลาที่กำหนด</p>
+        </div>
+        <!-- Stage legends -->
+        <div class="flex flex-wrap items-center gap-3 text-xs">
+          <div class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded bg-blue-400"></span>
+            <span class="text-slate-300">Light (หลับตื้น)</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded bg-indigo-600"></span>
+            <span class="text-slate-300">Deep (หลับลึก)</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="w-3 h-3 rounded bg-cyan-400"></span>
+            <span class="text-slate-300">REM (ฝัน/จัดระเบียบสมอง)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dynamic Cycle Visual Bar -->
+      <div class="space-y-4">
+        <!-- Visual Timeline bar -->
+        <div>
+          <div class="h-10 w-full bg-slate-900/90 rounded-xl overflow-hidden p-1 flex gap-1 border border-white/10 shadow-inner" id="sleepStagesContainer">
+            <!-- Filled dynamically by JavaScript -->
+          </div>
+          <!-- Time tick markers -->
+          <div class="flex justify-between items-center text-[11px] text-slate-400 font-mono mt-1.5 px-1" id="timelineAxisLabels">
+            <span>23:00</span>
+            <span>06:30</span>
+          </div>
+        </div>
+
+        <!-- Cycle details breakdown cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2" id="stageDetailsCards">
+          <div class="p-3 rounded-xl bg-slate-900/50 border border-blue-500/20">
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="font-medium text-blue-300">Light Sleep (N1 + N2)</span>
+              <span id="lightSleepPercent" class="font-mono text-slate-300 font-bold">50%</span>
+            </div>
+            <div class="text-xs text-slate-400" id="lightSleepTime">3 ชม. 45 น.</div>
+            <div class="text-[11px] text-slate-500 mt-1">ผ่อนคลายกล้ามเนื้อ ลดอัตราการเต้นหัวใจ</div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-900/50 border border-indigo-500/20">
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="font-medium text-indigo-300">Deep Sleep (N3 / SWS)</span>
+              <span id="deepSleepPercent" class="font-mono text-slate-300 font-bold">25%</span>
+            </div>
+            <div class="text-xs text-slate-400" id="deepSleepTime">1 ชม. 52 น.</div>
+            <div class="text-[11px] text-slate-500 mt-1">หลั่ง Growth Hormone ซ่อมแซมกล้ามเนื้อและภูมิคุ้มกัน</div>
+          </div>
+
+          <div class="p-3 rounded-xl bg-slate-900/50 border border-cyan-500/20">
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="font-medium text-cyan-300">REM Sleep (Rapid Eye)</span>
+              <span id="remSleepPercent" class="font-mono text-slate-300 font-bold">25%</span>
+            </div>
+            <div class="text-xs text-slate-400" id="remSleepTime">1 ชม. 52 น.</div>
+            <div class="text-[11px] text-slate-500 mt-1">ประมวลผลความจำ อารมณ์ และความคิดสร้างสรรค์</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="infoModal" class="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-card max-w-md w-full rounded-2xl p-6 border border-white/20 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+          <span>🌙</span> วิทยาศาสตร์รอบการนอน (90-Min Cycles)
+        </h3>
+        <button id="closeInfoBtn" class="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+      </div>
+      <div class="text-xs text-slate-300 space-y-2.5 leading-relaxed">
+        <p>1 รอบการนอนหลับของมนุษย์ปกติจะกินเวลาประมาณ <strong>90 - 110 นาที</strong> โดยประกอบด้วย:</p>
+        <ul class="list-disc list-inside space-y-1 text-slate-300 pl-1">
+          <li><strong>Light Sleep (ระยะ 1 และ 2):</strong> เริ่มเคลิ้มหลับ ผ่อนคลาย</li>
+          <li><strong>Deep Sleep (ระยะ 3):</strong> หลับลึก เซลล์และระบบร่างกายซ่อมแซมตัวเองสูงสุด</li>
+          <li><strong>REM (ช่วงฝัน):</strong> สมองทำงานประมวลผลความทรงจำ</li>
+        </ul>
+        <p>การตั้งนาฬิกาปลุกให้ตรงกับ <strong>"จุดสิ้นสุดของรอบ"</strong> (เช่น ครบ 4, 5 หรือ 6 รอบ) จะช่วยให้คุณตื่นนอนได้อย่างกระปรี้กระเปร่าที่สุด และลดอาการงัวเงียได้ดีเยี่ยม</p>
+      </div>
+      <button id="confirmInfoBtn" class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition">
+        เข้าใจแล้ว
+      </button>
+    </div>
+  </div>
+
+  <footer class="w-full max-w-4xl mx-auto px-5 py-4 text-center text-xs text-slate-500 border-t border-white/5">
+    <span>SleepClock • คำนวณและปรับเวลานอนตามหลักสรีรวิทยาการนอนหลับ 24 ชั่วโมง</span>
+  </footer>
+
+  <script>
+    /*
+     * Interactive Sleep Clock Script
+     * - Circular 24-Hour dial with Clockwise drag support
+     * - Bedtime & Wake-up handle coordination
+     * - Web Audio API ambient sound generator
+     */
+    
+    // Core state variables (in 24-hour decimal format, 0.0 to 24.0)
+    let bedtimeHour = 23.0; // 23:00 (11:00 PM)
+    let wakeupHour = 6.5;   // 06:30 (6:30 AM)
+
+    const DIAL_RADIUS = 145;
+    const CENTER_X = 200;
+    const CENTER_Y = 200;
+
+    // DOM Elements
+    const clockSvg = document.getElementById('clockSvg');
+    const sleepArcPath = document.getElementById('sleepArcPath');
+    const bedtimeHandle = document.getElementById('bedtimeHandle');
+    const wakeupHandle = document.getElementById('wakeupHandle');
+    const ticksContainer = document.getElementById('ticksContainer');
+
+    const bedtimeDisplay = document.getElementById('bedtimeDisplay');
+    const bedtimeMeridiem = document.getElementById('bedtimeMeridiem');
+    const wakeupDisplay = document.getElementById('wakeupDisplay');
+    const wakeupMeridiem = document.getElementById('wakeupMeridiem');
+    const durationDisplay = document.getElementById('durationDisplay');
+    const durationSub = document.getElementById('durationSub');
+    const cyclesCountDisplay = document.getElementById('cyclesCountDisplay');
+    const cycleStatusBadge = document.getElementById('cycleStatusBadge');
+    const cycleRecommendationText = document.getElementById('cycleRecommendationText');
+    const centerDurationText = document.getElementById('centerDurationText');
+    const centerCyclesText = document.getElementById('centerCyclesText');
+    const optimalWakeTimesList = document.getElementById('optimalWakeTimesList');
+    const sleepStagesContainer = document.getElementById('sleepStagesContainer');
+    const timelineAxisLabels = document.getElementById('timelineAxisLabels');
+
+    const lightSleepPercent = document.getElementById('lightSleepPercent');
+    const lightSleepTime = document.getElementById('lightSleepTime');
+    const deepSleepPercent = document.getElementById('deepSleepPercent');
+    const deepSleepTime = document.getElementById('deepSleepTime');
+    const remSleepPercent = document.getElementById('remSleepPercent');
+    const remSleepTime = document.getElementById('remSleepTime');
+
+    // Modal elements
+    const infoBtn = document.getElementById('infoBtn');
+    const infoModal = document.getElementById('infoModal');
+    const closeInfoBtn = document.getElementById('closeInfoBtn');
+    const confirmInfoBtn = document.getElementById('confirmInfoBtn');
+
+    function initClockMarks() {
+      ticksContainer.innerHTML = '';
+      for (let h = 0; h < 24; h++) {
+        // In 24h dial: 00:00 (Midnight) at TOP (270 deg / -90 deg from standard cartesian)
+        // Angle in degrees where 0h = 0 deg (Top), 6h = 90 deg (Right), 12h = 180 deg (Bottom), 18h = 270 deg (Left)
+        const angleDeg = (h / 24) * 360;
+        const angleRad = (angleDeg - 90) * (Math.PI / 180);
+
+        const isMajor = h % 3 === 0;
+        const tickLength = isMajor ? 10 : 5;
+        const innerR = DIAL_RADIUS - tickLength;
+        const outerR = DIAL_RADIUS + tickLength;
+
+        const x1 = CENTER_X + Math.cos(angleRad) * (DIAL_RADIUS - 12);
+        const y1 = CENTER_Y + Math.sin(angleRad) * (DIAL_RADIUS - 12);
+        const x2 = CENTER_X + Math.cos(angleRad) * (DIAL_RADIUS + (isMajor ? 12 : 6));
+        const y2 = CENTER_Y + Math.sin(angleRad) * (DIAL_RADIUS + (isMajor ? 12 : 6));
+
+        // Tick line
+        const tick = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tick.setAttribute('x1', x1);
+        tick.setAttribute('y1', y1);
+        tick.setAttribute('x2', x2);
+        tick.setAttribute('y2', y2);
+        tick.setAttribute('stroke', isMajor ? '#64748b' : '#334155');
+        tick.setAttribute('stroke-width', isMajor ? '2' : '1');
+        tick.setAttribute('stroke-linecap', 'round');
+        ticksContainer.appendChild(tick);
+
+        // Numeric labels for every 3 hours: 0, 3, 6, 9, 12, 15, 18, 21
+        if (isMajor) {
+          const textR = DIAL_RADIUS - 26;
+          const tx = CENTER_X + Math.cos(angleRad) * textR;
+          const ty = CENTER_Y + Math.sin(angleRad) * textR;
+
+          const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          text.setAttribute('x', tx);
+          text.setAttribute('y', ty + 4);
+          text.setAttribute('text-anchor', 'middle');
+          text.setAttribute('fill', h === 0 || h === 12 ? '#cbd5e1' : '#94a3b8');
+          text.setAttribute('font-size', h === 0 || h === 12 ? '11' : '9.5');
+          text.setAttribute('font-weight', h === 0 || h === 12 ? '700' : '500');
+          text.setAttribute('font-family', '"Plus Jakarta Sans", sans-serif');
+
+          let labelText = `${h}:00`;
+          if (h === 0) labelText = '00:00';
+          if (h === 12) labelText = '12:00';
+          text.textContent = labelText;
+          ticksContainer.appendChild(text);
+        }
+      }
+    }
+
+    // Converts hour decimal (0-24) to polar angle in radians (-90 deg at hour 0)
+    function hourToRad(hour) {
+      const deg = (hour / 24) * 360 - 90;
+      return deg * (Math.PI / 180);
+    }
+
+    // Converts SVG coordinates to hour decimal (0 - 24)
+    function coordsToHour(x, y) {
+      const dx = x - CENTER_X;
+      const dy = y - CENTER_Y;
+      let angle = Math.atan2(dy, dx) * (180 / Math.PI); // -180 to 180 (0 is at 3 o'clock)
+      // Rotate coordinate system so 0 is at Top (-90 deg)
+      angle += 90;
+      if (angle < 0) angle += 360;
+      let hour = (angle / 360) * 24;
+      if (hour >= 24) hour -= 24;
+      return hour;
+    }
+
+    // Snap to 5-minute increments for clean usability (5 min = 5/60 = 0.0833 hr)
+    function snapToMinutes(hour, minuteInterval = 5) {
+      const totalMinutes = hour * 60;
+      const roundedMinutes = Math.round(totalMinutes / minuteInterval) * minuteInterval;
+      let snappedHour = roundedMinutes / 60;
+      if (snappedHour >= 24) snappedHour -= 24;
+      if (snappedHour < 0) snappedHour += 24;
+      return snappedHour;
+    }
+
+    // Formats hour float into HH:MM and AM/PM strings
+    function formatTime(hour) {
+      let h = Math.floor(hour);
+      let m = Math.round((hour - h) * 60);
+      if (m === 60) {
+        h = (h + 1) % 24;
+        m = 0;
+      }
+      const hh = h.toString().padStart(2, '0');
+      const mm = m.toString().padStart(2, '0');
+
+      // AM/PM calculation
+      const period = h >= 12 ? 'PM' : 'AM';
+      let h12 = h % 12;
+      if (h12 === 0) h12 = 12;
+      const formatted12 = `${h12.toString().padStart(2, '0')}:${mm} ${period}`;
+
+      return {
+        time24: `${hh}:${mm}`,
+        time12: formatted12,
+        hours: h,
+        minutes: m
+      };
+    }
+
+    // Computes clockwise sleep duration from bedtime to wakeup
+    function getSleepDuration(bed, wake) {
+      let dur = wake - bed;
+      if (dur < 0) dur += 24;
+      // Prevent 0 from being full 24h unintentionally
+      if (dur === 0) dur = 24;
+      return dur;
+    }
+
+    function updateClockUI() {
+      // 1. Calculate handle positions
+      const bedRad = hourToRad(bedtimeHour);
+      const wakeRad = hourToRad(wakeupHour);
+
+      const bedX = CENTER_X + Math.cos(bedRad) * DIAL_RADIUS;
+      const bedY = CENTER_Y + Math.sin(bedRad) * DIAL_RADIUS;
+
+      const wakeX = CENTER_X + Math.cos(wakeRad) * DIAL_RADIUS;
+      const wakeY = CENTER_Y + Math.sin(wakeRad) * DIAL_RADIUS;
+
+      // Update Handle SVG positions
+      bedtimeHandle.setAttribute('transform', `translate(${bedX - 200}, ${bedY - 55})`);
+      wakeupHandle.setAttribute('transform', `translate(${wakeX - 200}, ${wakeY - 55})`);
+
+      // 2. Generate Sleep Arc (Clockwise from Bedtime to Wakeup)
+      const durationHours = getSleepDuration(bedtimeHour, wakeupHour);
+      const isLargeArc = durationHours > 12 ? 1 : 0;
+
+      // SVG path definition
+      const d = [
+        `M ${bedX} ${bedY}`,
+        `A ${DIAL_RADIUS} ${DIAL_RADIUS} 0 ${isLargeArc} 1 ${wakeX} ${wakeY}`
+      ].join(' ');
+
+      sleepArcPath.setAttribute('d', d);
+
+      // 3. Update Text Readouts
+      const bedFmt = formatTime(bedtimeHour);
+      const wakeFmt = formatTime(wakeupHour);
+
+      bedtimeDisplay.textContent = bedFmt.time24;
+      bedtimeMeridiem.textContent = bedFmt.time12;
+
+      wakeupDisplay.textContent = wakeFmt.time24;
+      wakeupMeridiem.textContent = wakeFmt.time12;
+
+      // Duration calculations
+      const totalMinutes = Math.round(durationHours * 60);
+      const durHours = Math.floor(totalMinutes / 60);
+      const durMins = totalMinutes % 60;
+
+      const durStringTh = `${durHours} ชม. ${durMins > 0 ? durMins + ' น.' : ''}`;
+      durationDisplay.textContent = durStringTh;
+      durationSub.textContent = `${totalMinutes} นาที`;
+      centerDurationText.textContent = `${durHours}h ${durMins}m`;
+
+      // 4. Calculate Sleep Cycles (90 min per cycle)
+      const cycles = durationHours / 1.5;
+      const fullCycles = Math.floor(cycles);
+      const cycleRemainder = durationHours % 1.5; // in hours
+      cyclesCountDisplay.textContent = cycles.toFixed(1);
+      centerCyclesText.textContent = `${cycles.toFixed(1)} รอบการนอน`;
+
+      // Cycle Quality Assessment
+      evaluateSleepQuality(cycles, fullCycles, cycleRemainder, durationHours);
+
+      // 5. Update Hypnogram Stages Visual Breakdown
+      renderSleepHypnogram(durationHours, bedFmt.time24, wakeFmt.time24);
+
+      // 6. Update Optimal Wake Times Recommendations
+      updateOptimalWakeAdvisor(bedtimeHour);
+    }
+
+    function evaluateSleepQuality(cycles, fullCycles, remainder, totalDuration) {
+      const remMins = Math.round(remainder * 60);
+
+      // Alignment check: close to full 90-min cycle (within 15 mins)
+      const isAligned = remMins <= 12 || remMins >= 78;
+
+      if (totalDuration < 4.5) {
+        cycleStatusBadge.textContent = 'นอนน้อยเกินไป (Sleep Debt)';
+        cycleStatusBadge.className = 'text-xs font-semibold text-rose-400';
+        cycleRecommendationText.textContent = 'ร่างกายฟื้นตัวไม่พอ ประสิทธิภาพสมองจะลดลง';
+      } else if (isAligned) {
+        if (cycles >= 4.7 && cycles <= 5.3) {
+          cycleStatusBadge.textContent = 'รอบสมบูรณ์แบบ (5 รอบทองคำ)';
+          cycleStatusBadge.className = 'text-xs font-semibold text-emerald-400';
+          cycleRecommendationText.textContent = 'สมบูรณ์แบบ: ตื่นช่วงท้าย REM ไม่งัวเงีย (Zero Inertia)';
+        } else if (cycles >= 5.7 && cycles <= 6.3) {
+          cycleStatusBadge.textContent = 'การฟื้นฟูล้ำลึก (6 รอบ)';
+          cycleStatusBadge.className = 'text-xs font-semibold text-cyan-400';
+          cycleRecommendationText.textContent = 'ยอดเยี่ยม: สำหรับวันที่ใช้แรงหรือสมองหนัก';
+        } else {
+          cycleStatusBadge.textContent = 'จบรอบพอดี (ตื่นสดชื่น)';
+          cycleStatusBadge.className = 'text-xs font-semibold text-emerald-400';
+          cycleRecommendationText.textContent = 'ตื่นเบาสบาย ร่างกายผ่านวงจรครบถ้วน';
+        }
+      } else {
+        cycleStatusBadge.textContent = 'เสี่ยงตื่นกลางรอบ (หลับลึก)';
+        cycleStatusBadge.className = 'text-xs font-semibold text-amber-400';
+        cycleRecommendationText.textContent = `แนะนำปรับเวลาตื่นขึ้น/ลงราว ${remMins < 45 ? remMins : 90 - remMins} นาที เพื่อไม่ให้งัวเงีย`;
+      }
+    }
+
+    function renderSleepHypnogram(durationHours, bedStr, wakeStr) {
+      sleepStagesContainer.innerHTML = '';
+      timelineAxisLabels.children[0].textContent = bedStr;
+      timelineAxisLabels.children[1].textContent = wakeStr;
+
+      const numCycles = Math.max(1, Math.round(durationHours / 1.5));
+      
+      // Dynamic generation of realistic sleep sequence
+      // In early cycles: Deep sleep is heavier (~40%)
+      // In later cycles: REM sleep expands significantly (~40%)
+      const stages = [];
+
+      for (let c = 0; c < numCycles; c++) {
+        const cycleProgress = c / numCycles; // 0 to 1
+        
+        // Deep sleep decreases over time
+        const deepRatio = Math.max(0.12, 0.40 - cycleProgress * 0.28);
+        // REM sleep increases over time
+        const remRatio = Math.min(0.38, 0.15 + cycleProgress * 0.25);
+        // Light sleep fills remaining
+        const lightRatio = Math.max(0.2, 1 - deepRatio - remRatio);
+
+        stages.push({ name: 'Light', ratio: lightRatio * (1 / numCycles), color: 'bg-blue-400', label: 'N1/N2' });
+        stages.push({ name: 'Deep', ratio: deepRatio * (1 / numCycles), color: 'bg-indigo-600', label: 'N3 Deep' });
+        stages.push({ name: 'REM', ratio: remRatio * (1 / numCycles), color: 'bg-cyan-400', label: 'REM' });
+      }
+
+      stages.forEach((st) => {
+        const seg = document.createElement('div');
+        const pct = (st.ratio * 100).toFixed(1);
+        seg.style.width = `${pct}%`;
+        seg.className = `h-full ${st.color} rounded-sm relative group transition-all duration-300 hover:brightness-125`;
+        
+        // Tooltip
+        seg.title = `${st.name} Sleep (~${pct}%)`;
+        sleepStagesContainer.appendChild(seg);
+      });
+
+      // Update stat cards
+      const totalMins = durationHours * 60;
+      const lightM = Math.round(totalMins * 0.50);
+      const deepM = Math.round(totalMins * 0.25);
+      const remM = Math.round(totalMins * 0.25);
+
+      lightSleepPercent.textContent = `~50%`;
+      lightSleepTime.textContent = `${Math.floor(lightM / 60)} ชม. ${lightM % 60} น.`;
+
+      deepSleepPercent.textContent = `~25%`;
+      deepSleepTime.textContent = `${Math.floor(deepM / 60)} ชม. ${deepM % 60} น.`;
+
+      remSleepPercent.textContent = `~25%`;
+      remSleepTime.textContent = `${Math.floor(remM / 60)} ชม. ${remM % 60} น.`;
+    }
+
+    function updateOptimalWakeAdvisor(bedtime) {
+      optimalWakeTimesList.innerHTML = '';
+      // Calculate wake times for 4 cycles (6h), 5 cycles (7.5h), and 6 cycles (9h)
+      const recommendations = [
+        { cycles: 4, hours: 6.0, label: '4 รอบ (6h)' },
+        { cycles: 5, hours: 7.5, label: '5 รอบ (7.5h)', highlight: true },
+        { cycles: 6, hours: 9.0, label: '6 รอบ (9h)' }
+      ];
+
+      recommendations.forEach(rec => {
+        let wakeH = (bedtime + rec.hours) % 24;
+        const fmt = formatTime(wakeH);
+
+        const card = document.createElement('button');
+        card.className = `p-2 rounded-xl text-center border transition-all ${
+          rec.highlight 
+            ? 'bg-indigo-600/20 border-indigo-500/50 hover:bg-indigo-600/30' 
+            : 'bg-slate-900/40 border-slate-700/40 hover:bg-slate-800'
+        }`;
+
+        card.innerHTML = `
+          <div class="text-[10px] text-slate-400">${rec.label}</div>
+          <div class="text-sm font-bold font-mono text-slate-100">${fmt.time24}</div>
+          <div class="text-[9px] ${rec.highlight ? 'text-indigo-300 font-semibold' : 'text-slate-400'}">${rec.highlight ? '★ ยอดนิยม' : 'กดเลือก'}</div>
+        `;
+
+        card.addEventListener('click', () => {
+          wakeupHour = wakeH;
+          updateClockUI();
+        });
+
+        optimalWakeTimesList.appendChild(card);
+      });
+    }
+
+    let activeDrag = null; // 'bedtime', 'wakeup', 'arc', or null
+    let arcDragStartBed = 0;
+    let arcDragStartWake = 0;
+    let arcDragStartHour = 0;
+
+    function getSvgCoordinates(e) {
+      const rect = clockSvg.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      // Convert to SVG viewBox scale (400 x 400)
+      const scaleX = 400 / rect.width;
+      const scaleY = 400 / rect.height;
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
+      };
+    }
+
+    // Start handle drags
+    bedtimeHandle.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      activeDrag = 'bedtime';
+      bedtimeHandle.setPointerCapture(e.pointerId);
+    });
+
+    wakeupHandle.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      activeDrag = 'wakeup';
+      wakeupHandle.setPointerCapture(e.pointerId);
+    });
+
+    // Arc Drag (move entire sleep window together)
+    sleepArcPath.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      activeDrag = 'arc';
+      const coords = getSvgCoordinates(e);
+      arcDragStartHour = coordsToHour(coords.x, coords.y);
+      arcDragStartBed = bedtimeHour;
+      arcDragStartWake = wakeupHour;
+      sleepArcPath.setPointerCapture(e.pointerId);
+    });
+
+    // Pointer move listener on document for high reliability
+    function onPointerMove(e) {
+      if (!activeDrag) return;
+      e.preventDefault();
+
+      const coords = getSvgCoordinates(e);
+      const currentHour = coordsToHour(coords.x, coords.y);
+
+      if (activeDrag === 'bedtime') {
+        bedtimeHour = snapToMinutes(currentHour, 5);
+        updateClockUI();
+      } else if (activeDrag === 'wakeup') {
+        wakeupHour = snapToMinutes(currentHour, 5);
+        updateClockUI();
+      } else if (activeDrag === 'arc') {
+        let delta = currentHour - arcDragStartHour;
+        let newBed = (arcDragStartBed + delta) % 24;
+        let newWake = (arcDragStartWake + delta) % 24;
+        if (newBed < 0) newBed += 24;
+        if (newWake < 0) newWake += 24;
+
+        bedtimeHour = snapToMinutes(newBed, 5);
+        wakeupHour = snapToMinutes(newWake, 5);
+        updateClockUI();
+      }
+    }
+
+    function onPointerUp(e) {
+      activeDrag = null;
+    }
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+
+    document.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const duration = parseFloat(btn.dataset.hours);
+        const bed = parseFloat(btn.dataset.bed);
+        bedtimeHour = bed;
+        wakeupHour = (bed + duration) % 24;
+        updateClockUI();
+      });
+    });
+
+    let audioCtx = null;
+    let isPlayingSound = false;
+    let noiseNode = null;
+    let filterNode = null;
+    let gainNode = null;
+
+    const ambientSoundBtn = document.getElementById('ambientSoundBtn');
+    const soundIcon = document.getElementById('soundIcon');
+    const soundText = document.getElementById('soundText');
+
+    function toggleAmbientSound() {
+      if (isPlayingSound) {
+        stopSound();
+      } else {
+        startSound();
+      }
+    }
+
+    function startSound() {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!audioCtx) {
+          audioCtx = new AudioContext();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+
+        // Generate Pink/Brownish soothing sleep noise buffer
+        const bufferSize = audioCtx.sampleRate * 2;
+        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const output = noiseBuffer.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0;
+
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99 * b0 + white * 0.05;
+          b1 = 0.95 * b1 + white * 0.1;
+          b2 = 0.85 * b2 + white * 0.2;
+          output[i] = (b0 + b1 + b2) * 0.5;
+        }
+
+        noiseNode = audioCtx.createBufferSource();
+        noiseNode.buffer = noiseBuffer;
+        noiseNode.loop = true;
+
+        // Lowpass filter to create calming rain/ocean effect
+        filterNode = audioCtx.createBiquadFilter();
+        filterNode.type = 'lowpass';
+        filterNode.frequency.setValueAtTime(450, audioCtx.currentTime);
+
+        gainNode = audioCtx.createGain();
+        gainNode.gain.setValueAtTime(0.01, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.18, audioCtx.currentTime + 1.2);
+
+        noiseNode.connect(filterNode);
+        filterNode.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        noiseNode.start();
+        isPlayingSound = true;
+        soundIcon.textContent = '🔊';
+        soundText.textContent = 'กำลังเปิดเสียงกล่อมนอน';
+        ambientSoundBtn.classList.add('border-indigo-400', 'bg-indigo-500/20');
+      } catch (err) {
+        console.error('Audio could not be initialized:', err);
+      }
+    }
+
+    function stopSound() {
+      if (gainNode && audioCtx) {
+        gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.6);
+        setTimeout(() => {
+          if (noiseNode) {
+            noiseNode.stop();
+            noiseNode.disconnect();
+          }
+          isPlayingSound = false;
+          soundIcon.textContent = '🎧';
+          soundText.textContent = 'เสียงกล่อมนอน (White Noise)';
+          ambientSoundBtn.classList.remove('border-indigo-400', 'bg-indigo-500/20');
+        }, 600);
+      }
+    }
+
+    ambientSoundBtn.addEventListener('click', toggleAmbientSound);
+
+    infoBtn.addEventListener('click', () => infoModal.classList.remove('hidden'));
+    closeInfoBtn.addEventListener('click', () => infoModal.classList.add('hidden'));
+    confirmInfoBtn.addEventListener('click', () => infoModal.classList.add('hidden'));
+    infoModal.addEventListener('click', (e) => {
+      if (e.target === infoModal) infoModal.classList.add('hidden');
+    });
+
+    window.addEventListener('load', () => {
+      initClockMarks();
+      updateClockUI();
+    });
+  </script>
+</body>
+</html>
