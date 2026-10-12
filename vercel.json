@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/interactive_sleep_clock.html"
+    }
+  ]
+}

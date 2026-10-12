@@ -23,6 +23,16 @@
 
 Tailwind CSS และฟอนต์โหลดจาก CDN ดังนั้นการเชื่อมต่ออินเทอร์เน็ตช่วยให้หน้าเว็บแสดงผลได้ครบถ้วน เสียงจะเริ่มเล่นเมื่อผู้ใช้กดปุ่มตามข้อกำหนดของเบราว์เซอร์
 
+## Deploy บน Vercel
+
+1. เข้าสู่ระบบ [Vercel](https://vercel.com/) แล้วเลือก **Add New → Project**
+2. เชื่อมต่อ GitHub หากระบบร้องขอ แล้ว Import repository `win29479/interactive_sleep_clock-for-me`
+3. ตั้ง **Framework Preset** เป็น **Other** และใช้ Root Directory เป็น `./`
+4. เว้น Build Command และ Output Directory ว่างไว้ เพราะเป็นเว็บ HTML แบบ static ที่ไม่ต้อง build
+5. เลือก **Deploy**
+
+ไฟล์ `vercel.json` ตั้งค่าให้ URL หลักของโปรเจกต์ Vercel เปิดหน้า `interactive_sleep_clock.html` โดยตรง ส่วนไฟล์ HTML ยังเปิดได้จาก URL ที่ลงท้ายด้วย `/interactive_sleep_clock.html` เช่นกัน
+
 ## เทคโนโลยี
 
 - HTML, CSS และ JavaScript โดยไม่ใช้ framework
